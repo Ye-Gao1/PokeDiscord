@@ -5,6 +5,8 @@ import random, os
 characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 !@#$%^&*()-_+=`~;:'[]{}|<>,./?\"\\"
 character_count = len(characters)
 
+saved_keys = {}
+
 def adjust_key_length(key, message):
     return (key * (len(message) // len(key)) + key[:len(message) % len(key)]) if key else ""
 
@@ -40,6 +42,18 @@ def decrypt(cipher, key):
         plain += plain_character
     return plain
 
+def invert_character(character):
+    character_code = characters.index(character)
+    inverted_code = (character_count - character_code) % character_count
+    inverted_character = characters[inverted_code]
+    return inverted_character
+
+def invert(text):
+    inverted_text = ""
+    for character in text:
+        inverted_text += invert_character(character)
+    return inverted_text
+
 def random_key(length):
     return ''.join(random.choice(characters) for _ in range(length))
 
@@ -64,5 +78,44 @@ async def decrypt_message(interaction: discord.Interaction, encrypted_message: s
     adjusted_key = adjust_key_length(key, encrypted_message)
     decrypted_message = decrypt(encrypted_message, adjusted_key)
     await interaction.response.send_message(f"Decrypted message: {decrypted_message}")
+
+@tree.command(name="generate_key", description="Generate a random key of a given length.")
+async def generate_key(interaction: discord.Interaction, length: int):
+    key = random_key(length)
+    await interaction.response.send_message(f"Generated key: {key}")
+
+@tree.command(name="save_key", description="Save a key with a name for later use.")
+async def save_key(interaction: discord.Interaction, key: str, name: str):
+    saved_keys[name] = key
+    await interaction.response.send_message(f"Key '{name}' saved.")
+
+@tree.command(name="retrieve_key", description="Retrieve a saved key by its name.")
+async def retrieve_key(interaction: discord.Interaction, name: str):
+    key = saved_keys.get(name)
+    if key:
+        await interaction.response.send_message(f"Key '{name}': {key}")
+    else:
+        await interaction.response.send_message(f"No key found with the name '{name}'.")
+
+@tree.command(name="list_keys", description="List all saved keys.")
+async def list_keys(interaction: discord.Interaction):
+    if saved_keys:
+        keys_list = "\n".join([f"{name}: {key}" for name, key in saved_keys.items()])
+        await interaction.response.send_message(f"Saved keys:\n{keys_list}")
+    else:
+        await interaction.response.send_message("No keys have been saved yet.")
+
+@tree.command(name="delete_key", description="Delete a saved key by its name.")
+async def delete_key(interaction: discord.Interaction, name: str):
+    if name in saved_keys:
+        del saved_keys[name]
+        await interaction.response.send_message(f"Key '{name}' deleted.")
+    else:
+        await interaction.response.send_message(f"No key found with the name '{name}'.")
+
+@tree.command(name="invert", description="Invert the characters of a message.")
+async def invert_message(interaction: discord.Interaction, message: str):
+    inverted_message = invert(message)
+    await interaction.response.send_message(f"Inverted message: {inverted_message}")
 
 client.run(os.environ['Token'])
