@@ -1,73 +1,41 @@
-import discord, os
-from discord.ext import commands
+import discord
+from discord import app_commands
+import random, os
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.reactions = True
-bot = commands.Bot(command_prefix='!', intents=intents)
-
-board = [':white_large_square:'] * 9
-current_player = 'X'
-game_in_progress = False
-game_message = None
-
-NUMBER_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+bot = discord.Client(intents=intents)
+tree = app_commands.CommandTree(bot)
 
 @bot.event
 async def on_ready():
-    print(f'{bot.user} has connected to Discord!')
+    print(f'Logged in as {bot.user}')
+    await tree.sync()
 
-@bot.command(name='tictactoe', help='Starts a new Tic Tac Toe game')
-async def tictactoe(ctx):
-    global board, current_player, game_in_progress, game_message
-    board = [':white_large_square:'] * 9
-    current_player = 'X'
-    game_in_progress = True
-    game_message = await ctx.send("Starting a new game of Tic Tac Toe!")
-    await display_board()
-    for emoji in NUMBER_EMOJIS:
-        await game_message.add_reaction(emoji)
+dice_emojis = {
+    1: "⚀",
+    2: "⚁",
+    3: "⚂",
+    4: "⚃",
+    5: "⚃",
+    6: "⚅"
+}
 
-@bot.event
-async def on_reaction_add(reaction, user):
-    global board, current_player, game_in_progress, game_message
-    if user == bot.user or not game_in_progress or reaction.message.id != game_message.id:
-        return
-
-    if str(reaction.emoji) in NUMBER_EMOJIS:
-        position = NUMBER_EMOJIS.index(str(reaction.emoji))
-        if board[position] == ':white_large_square:':
-            board[position] = ':regional_indicator_x:' if current_player == 'X' else ':o2:'
-            await display_board()
-
-            if check_winner():
-                await reaction.message.channel.send(f"Player {current_player} wins!")
-                game_in_progress = False
-            elif ':white_large_square:' not in board:
-                await reaction.message.channel.send("It's a tie!")
-                game_in_progress = False
+@tree.command(name="roll", description="Roll a specified number of dice with a specified number of sides")
+async def roll(interaction: discord.Interaction, sides: int = 6, count: int = 1):
+    if sides < 2:
+        await interaction.response.send_message("The dice must have at least 2 sides!")
+    elif count < 1:
+        await interaction.response.send_message("You must roll at least one dice!")
+    else:
+        results = []
+        for _ in range(count):
+            result = random.randint(1, sides)
+            if result in dice_emojis and sides <= 6:
+                results.append(f'{dice_emojis[result]} {result}')
             else:
-                current_player = 'O' if current_player == 'X' else 'X'
-                await reaction.message.channel.send(f"It's player {current_player}'s turn!")
-        else:
-            await reaction.message.channel.send("That position is already taken. Choose another.")
+                results.append(str(result))
 
-    await reaction.remove(user)
-
-async def display_board():
-    global game_message
-    board_display = '\n'.join([' '.join(board[i:i+3]) for i in range(0, 9, 3)])
-    await game_message.edit(content=f"Current board:\n{board_display}")
-
-def check_winner():
-    winning_combinations = [
-        [0, 1, 2], [3, 4, 5], [6, 7, 8],
-        [0, 3, 6], [1, 4, 7], [2, 5, 8],
-        [0, 4, 8], [2, 4, 6]
-    ]
-    for combo in winning_combinations:
-        if board[combo[0]] == board[combo[1]] == board[combo[2]] != ':white_large_square:':
-            return True
-    return False
+        await interaction.response.send_message(f'You rolled: {" ".join(results)} on a {sides}-sided dice!')
 
 bot.run(os.environ['Token'])
