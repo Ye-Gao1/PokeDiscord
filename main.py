@@ -1,6 +1,8 @@
 import discord
 from discord import app_commands
-import random, os
+import random
+from PIL import Image, ImageDraw, ImageFont
+import os
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -12,14 +14,26 @@ async def on_ready():
     print(f'Logged in as {bot.user}')
     await tree.sync()
 
-dice_emojis = {
-    1: "⚀",
-    2: "⚁",
-    3: "⚂",
-    4: "⚃",
-    5: "⚃",
-    6: "⚅"
-}
+def create_dice_image(value):
+    size = 100
+    img = Image.new('RGB', (size, size), color='white')
+    draw = ImageDraw.Draw(img)
+
+    dot_positions = {
+        1: [(50, 50)],
+        2: [(25, 25), (75, 75)],
+        3: [(25, 25), (50, 50), (75, 75)],
+        4: [(25, 25), (25, 75), (75, 25), (75, 75)],
+        5: [(25, 25), (25, 75), (75, 25), (75, 75), (50, 50)],
+        6: [(25, 25), (25, 50), (25, 75), (75, 25), (75, 50), (75, 75)]
+    }
+
+    for pos in dot_positions[value]:
+        draw.ellipse((pos[0] - 10, pos[1] - 10, pos[0] + 10, pos[1] + 10), fill='black')
+
+    img_path = f'dice_{value}.png'
+    img.save(img_path)
+    return img_path
 
 @tree.command(name="roll", description="Roll a specified number of dice with a specified number of sides")
 async def roll(interaction: discord.Interaction, sides: int = 6, count: int = 1):
@@ -28,14 +42,16 @@ async def roll(interaction: discord.Interaction, sides: int = 6, count: int = 1)
     elif count < 1:
         await interaction.response.send_message("You must roll at least one dice!")
     else:
-        results = []
+        image_paths = []
         for _ in range(count):
             result = random.randint(1, sides)
-            if result in dice_emojis and sides <= 6:
-                results.append(f'{dice_emojis[result]} {result}')
+            if sides == 6:
+                img_path = create_dice_image(result)
+                image_paths.append(img_path)
             else:
-                results.append(str(result))
+                await interaction.response.send_message(f'You rolled: {result} on a {sides}-sided dice!')
 
-        await interaction.response.send_message(f'You rolled: {" ".join(results)} on a {sides}-sided dice!')
+        files = [discord.File(img_path) for img_path in image_paths]
+        await interaction.response.send_message(f'You rolled:', files=files)
 
 bot.run(os.environ['Token'])
