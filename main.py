@@ -1,57 +1,68 @@
 import discord
 from discord import app_commands
-import random
-from PIL import Image, ImageDraw, ImageFont
-import os
+import random, os
+
+characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890 !@#$%^&*()-_+=`~;:'[]{}|<>,./?\"\\"
+character_count = len(characters)
+
+def adjust_key_length(key, message):
+    return (key * (len(message) // len(key)) + key[:len(message) % len(key)]) if key else ""
+
+def encrypt_character(plain, key):
+    key_code = characters.index(key)
+    plain_code = characters.index(plain)
+    cipher_code = (key_code + plain_code) % character_count
+    cipher = characters[cipher_code]
+    return cipher
+
+def encrypt(plain, key):
+    cipher = ""
+    for (plain_index, plain_character) in enumerate(plain):
+        key_index = plain_index % len(key)
+        key_character = key[key_index]
+        cipher_character = encrypt_character(plain_character, key_character)
+        cipher += cipher_character
+    return cipher
+
+def decrypt_character(cipher, key):
+    key_code = characters.index(key)
+    cipher_code = characters.index(cipher)
+    plain_code = (cipher_code - key_code) % character_count
+    plain = characters[plain_code]
+    return plain
+
+def decrypt(cipher, key):
+    plain = ""
+    for (cipher_index, cipher_character) in enumerate(cipher):
+        key_index = cipher_index % len(key)
+        key_character = key[key_index]
+        plain_character = decrypt_character(cipher_character, key_character)
+        plain += plain_character
+    return plain
+
+def random_key(length):
+    return ''.join(random.choice(characters) for _ in range(length))
 
 intents = discord.Intents.default()
 intents.message_content = True
-bot = discord.Client(intents=intents)
-tree = app_commands.CommandTree(bot)
+client = discord.Client(intents=intents)
+tree = app_commands.CommandTree(client)
 
-@bot.event
+@client.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
     await tree.sync()
+    print(f"Logged in as {client.user}")
 
-def create_dice_image(value):
-    size = 100
-    img = Image.new('RGB', (size, size), color='white')
-    draw = ImageDraw.Draw(img)
+@tree.command(name="encrypt", description="Encrypt a message using a key.")
+async def encrypt_message(interaction: discord.Interaction, message: str, key: str):
+    adjusted_key = adjust_key_length(key, message)
+    encrypted_message = encrypt(message, adjusted_key)
+    await interaction.response.send_message(f"Encrypted message: {encrypted_message}")
 
-    dot_positions = {
-        1: [(50, 50)],
-        2: [(25, 25), (75, 75)],
-        3: [(25, 25), (50, 50), (75, 75)],
-        4: [(25, 25), (25, 75), (75, 25), (75, 75)],
-        5: [(25, 25), (25, 75), (75, 25), (75, 75), (50, 50)],
-        6: [(25, 25), (25, 50), (25, 75), (75, 25), (75, 50), (75, 75)]
-    }
+@tree.command(name="decrypt", description="Decrypt a message using a key.")
+async def decrypt_message(interaction: discord.Interaction, encrypted_message: str, key: str):
+    adjusted_key = adjust_key_length(key, encrypted_message)
+    decrypted_message = decrypt(encrypted_message, adjusted_key)
+    await interaction.response.send_message(f"Decrypted message: {decrypted_message}")
 
-    for pos in dot_positions[value]:
-        draw.ellipse((pos[0] - 10, pos[1] - 10, pos[0] + 10, pos[1] + 10), fill='black')
-
-    img_path = f'dice_{value}.png'
-    img.save(img_path)
-    return img_path
-
-@tree.command(name="roll", description="Roll a specified number of dice with a specified number of sides")
-async def roll(interaction: discord.Interaction, sides: int = 6, count: int = 1):
-    if sides < 2:
-        await interaction.response.send_message("The dice must have at least 2 sides!")
-    elif count < 1:
-        await interaction.response.send_message("You must roll at least one dice!")
-    else:
-        image_paths = []
-        for _ in range(count):
-            result = random.randint(1, sides)
-            if sides == 6:
-                img_path = create_dice_image(result)
-                image_paths.append(img_path)
-            else:
-                await interaction.response.send_message(f'You rolled: {result} on a {sides}-sided dice!')
-
-        files = [discord.File(img_path) for img_path in image_paths]
-        await interaction.response.send_message(f'You rolled:', files=files)
-
-bot.run(os.environ['Token'])
+client.run(os.environ['Token'])
