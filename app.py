@@ -1,87 +1,84 @@
 import discord
 import requests
-import os
-import random
+import random, os
+import yaml
+from discord.ext import commands
 
 intents = discord.Intents.default()
 intents.message_content = True
-client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents)
 
-COMMAND_PREFIX = '!'
+rarity_tiers = {"Common": 60, "Uncommon": 25, "Rare": 10, "Legendary": 5}
 
-@client.event
+if os.path.exists('caught_pokemon.yaml'):
+    with open('caught_pokemon.yaml', 'r') as file:
+        caught_pokemon = yaml.safe_load(file) or {}
+else:
+    caught_pokemon = {}
+
+
+@bot.event
 async def on_ready():
-    print(f'We have logged in as {client.user}')
+    print(f'{bot.user} has connected to Discord!')
 
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
 
-    if message.content.startswith(f'{COMMAND_PREFIX}kanye quote'):
-        try:
-            response = requests.get('https://api.kanye.rest/')
-            quote = response.json().get('quote')
-            await message.channel.send(f'Kanye says: "{quote}"')
-        except Exception as e:
-            await message.channel.send('Oops! Something went wrong.')
+@bot.command(name='catch')
+async def catch_pokemon(ctx):
+    pokemon_id = random.randint(1, 898)
+    response = requests.get(f'https://pokeapi.co/api/v2/pokemon/{pokemon_id}')
 
-    elif message.content.startswith(f'{COMMAND_PREFIX}advice'):
-        try:
-            response = requests.get('https://api.adviceslip.com/advice')
-            advice = response.json()['slip']['advice']
-            await message.channel.send(f'Here\'s some advice: {advice}')
-        except Exception as e:
-            await message.channel.send('Oops! Something went wrong.')
+    if response.status_code == 200:
+        pokemon_data = response.json()
+        name = pokemon_data['name'].capitalize()
+        sprite_url = pokemon_data['sprites']['front_default']
+        types = [t['type']['name'].capitalize() for t in pokemon_data['types']]
+        height = f"{pokemon_data['height']/10} m"
+        weight = f"{pokemon_data['weight']/10} kg"
+        rarity = random.choices(list(rarity_tiers.keys()),
+                                weights=rarity_tiers.values(),
+                                k=1)[0]
 
-    elif message.content.startswith(f'{COMMAND_PREFIX}cat'):
-        try:
-            response = requests.get('https://api.thecatapi.com/v1/images/search')
-            cat_url = response.json()[0]['url']
-            await message.channel.send(f'Here\'s a cat picture: {cat_url}')
-        except Exception as e:
-            await message.channel.send('Oops! Something went wrong.')
+        user_id = str(ctx.author.id)
+        if user_id not in caught_pokemon:
+            caught_pokemon[user_id] = []
+        caught_pokemon[user_id].append({
+            'name': name,
+            'types': types,
+            'height': height,
+            'weight': weight,
+            'rarity': rarity
+        })
+        with open('caught_pokemon.yaml', 'w') as file:
+            yaml.dump(caught_pokemon, file)
 
-    elif message.content.startswith(f'{COMMAND_PREFIX}joke'):
-        try:
-            response = requests.get('https://official-joke-api.appspot.com/random_joke')
-            joke_data = response.json()
-            setup = joke_data['setup']
-            punchline = joke_data['punchline']
-            await message.channel.send(f'Here\'s a joke:\n{setup}\n{punchline}')
-        except Exception as e:
-            await message.channel.send('Oops! Something went wrong.')
+        embed = discord.Embed(title=f'A wild {name} appeared!', color=0x00ff00)
+        embed.set_image(url=sprite_url)
+        embed.add_field(name='Type', value=', '.join(types))
+        embed.add_field(name='Height', value=height)
+        embed.add_field(name='Weight', value=weight)
+        embed.add_field(name='Rarity', value=rarity)
 
-    elif message.content.startswith(f'{COMMAND_PREFIX}fact'):
-        try:
-            response = requests.get('https://uselessfacts.jsph.pl/random.json?language=en')
-            fact = response.json()['text']
-            await message.channel.send(f'Here\'s a random fact: {fact}')
-        except Exception as e:
-            await message.channel.send('Oops! Something went wrong.')
+        await ctx.send(embed=embed)
+        await ctx.send(f"Congratulations! You caught a {name}!")
+    else:
+        await ctx.send("Oops! Failed to catch a Pokémon. Try again later.")
 
-    elif message.content.startswith(f'{COMMAND_PREFIX}weather'):
-        try:
-            city = message.content.split(f'{COMMAND_PREFIX}weather ', 1)[1]
-            api_key = os.environ['OPENWEATHER_API_KEY']
-            response = requests.get(f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metric')
-            weather_data = response.json()
-            temperature = weather_data['main']['temp']
-            description = weather_data['weather'][0]['description']
-            await message.channel.send(f'The weather in {city} is {description} with a temperature of {temperature}°C')
-        except Exception as e:
-            await message.channel.send('Oops! Something went wrong. Make sure to provide a valid city name.')
 
-    elif message.content.startswith(f'{COMMAND_PREFIX}help'):
-        help_message = (
-            "Here are the available commands:\n"
-            f"!kanye quote - Get a random Kanye West quote.\n"
-            f"!advice - Get a piece of advice.\n"
-            f"!cat - Get a random cat picture.\n"
-            f"!joke - Get a random joke.\n"
-            f"!fact - Get a random fact.\n"
-            f"!weather <city> - Get the current weather for a specified city."
-        )
-        await message.channel.send(help_message)
+@bot.command(name='pokedex')
+async def view_pokedex(ctx):
+    user_id = str(ctx.author.id)
+    if user_id in caught_pokemon and caught_pokemon[user_id]:
+        embed = discord.Embed(title=f"{ctx.author.name}'s Pokédex",
+                              color=0x0000ff)
+        for pokemon in caught_pokemon[user_id]:
+            embed.add_field(
+                name=pokemon['name'],
+                value=
+                f"Type: {', '.join(pokemon['types'])}\nRarity: {pokemon['rarity']}\nHeight: {pokemon['height']}\nWeight: {pokemon['weight']}",
+                inline=False)
+        await ctx.send(embed=embed)
+    else:
+        await ctx.send("Your Pokédex is empty. Go catch some Pokémon!")
 
-client.run(os.environ['Token'])
+
+bot.run(os.environ['Token'])

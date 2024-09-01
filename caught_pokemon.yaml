@@ -1,0 +1,35 @@
+'639195093873721356':
+- height: 1.0 m
+  name: Makuhita
+  rarity: Uncommon
+  types:
+  - Fighting
+  weight: 86.4 kg
+- height: 2.8 m
+  name: Zacian
+  rarity: Common
+  sprite_url: https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/888.png
+  types:
+  - Fairy
+  weight: 110.0 kg
+- height: 1.4 m
+  name: Carnivine
+  rarity: Rare
+  sprite_url: https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/455.png
+  types:
+  - Grass
+  weight: 27.0 kg
+- height: 1.5 m
+  name: Tornadus-incarnate
+  rarity: Uncommon
+  sprite_url: https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/641.png
+  types:
+  - Flying
+  weight: 63.0 kg
+- height: 0.8 m
+  name: Morgrem
+  rarity: Common
+  types:
+  - Dark
+  - Fairy
+  weight: 12.5 kg
